@@ -4,34 +4,106 @@ import type { EvaluationInput, EvaluationResult, CriterionScore } from '../types
 
 const MODEL_NAME = 'gemini-2.5-flash';
 
-const SYSTEM_PROMPT = `You are a certified IELTS examiner. Evaluate the essay strictly according to IELTS Writing Band Descriptors Updated May 2023. Do not inflate scores. Every criterion score must be justified using the official descriptor language. Return valid JSON only.
+const SYSTEM_PROMPT = `You are a certified IELTS examiner.
 
-SCORING RULES:
-- Never inflate scores. Score conservatively.
-- A band score must be justified using descriptor evidence.
-- Explain why higher bands were NOT achieved.
-- Quote specific descriptor characteristics.
-- Use 0.5 increments only (e.g., 6.0, 6.5, 7.0).
-- Calculate overall_band as the average of the four criteria, rounded to nearest 0.5.
-- Essays below required word count must receive penalties in Task Achievement/Task Response.
-- Do not act as a tutor first; act as an official IELTS examiner first.
-- Be stricter than most online IELTS checkers.`;
+Use the official IELTS Writing Band Descriptors exactly.
 
-const TASK1_DESCRIPTORS = `IELTS Academic Writing Task 1 Band Descriptors (May 2023):
-Band 9: Task Achievement - All requirements fully satisfied. Coherence - Message followed effortlessly. Lexical - Full flexibility, wide range. Grammar - Wide range with full control.
-Band 8: Task Achievement - All requirements covered appropriately; key features skilfully selected. Coherence - Followed with ease. Lexical - Wide resource fluently used. Grammar - Wide range flexibly used.
-Band 7: Task Achievement - Requirements covered; clear overview; key features highlighted. Coherence - Logically organised; clear progression. Lexical - Sufficient flexibility; some less common items. Grammar - Variety of complex structures.
-Band 6: Task Achievement - Focuses on task; overview attempted; some irrelevant info. Coherence - Generally coherent; cohesive devices mechanical. Lexical - Generally adequate; restricted range. Grammar - Mix of simple and complex; limited flexibility.
-Band 5: Task Achievement - Generally addresses task; key features not adequately covered. Coherence - Organisation not wholly logical. Lexical - Limited but minimally adequate. Grammar - Limited range; errors frequent.
-Band 4-0: Progressively fails to address task requirements.`;
+Do not inflate scores.
+Do not deflate scores.
+Do not score conservatively.
+Do not score aggressively.
 
-const TASK2_DESCRIPTORS = `IELTS Academic Writing Task 2 Band Descriptors (May 2023):
-Band 9: Task Response - Prompt explored in depth; clear fully developed position. Coherence - Message followed effortlessly. Lexical - Full flexibility. Grammar - Wide range with full control.
-Band 8: Task Response - Prompt sufficiently addressed; clear well-developed position. Coherence - Followed with ease. Lexical - Wide resource fluently used. Grammar - Wide range flexibly used.
-Band 7: Task Response - Main parts addressed; clear developed position. Coherence - Logically organised. Lexical - Sufficient flexibility. Grammar - Variety of complex structures.
-Band 6: Task Response - Main parts addressed; position relevant but conclusions unclear. Coherence - Generally coherent. Lexical - Generally adequate. Grammar - Mix of simple and complex.
-Band 5: Task Response - Main parts incompletely addressed. Coherence - Organisation not wholly logical. Lexical - Limited range. Grammar - Limited structures.
-Band 4-0: Progressively fails to address prompt.`;
+Score exactly as a real IELTS examiner would.
+
+If an essay satisfies most requirements of a higher band, assign the higher band.
+
+Judge only according to IELTS descriptors.
+
+Do not apply hidden penalties.
+
+Do not compare essays to native-speaker writing.
+
+Use only descriptor evidence.
+
+Score the four criteria (Task Achievement/Response, Coherence and Cohesion, Lexical Resource, and Grammatical Range and Accuracy) completely independently of each other. Do not let a low score in one criterion automatically drag down the scores of other criteria.
+
+Return valid JSON only matching the requested schema.`;
+
+const TASK1_DESCRIPTORS = `OFFICIAL IELTS ACADEMIC WRITING TASK 1 BAND DESCRIPTORS:
+
+BAND 9:
+- Task Achievement: Fully satisfies all the requirements of the task. Clearly presents a fully developed response.
+- Coherence and Cohesion: Uses cohesion in such a way that it attracts no attention. Skilfully manages paragraphing.
+- Lexical Resource: Uses a wide range of vocabulary with very natural and sophisticated control of lexical features; rare minor errors occur only as slips.
+- Grammatical Range and Accuracy: Uses a wide range of structures with full flexibility and accuracy; rare minor errors occur only as slips.
+
+BAND 8:
+- Task Achievement: Covers all requirements of the task sufficiently. Presents, highlights and illustrates key features clearly and appropriately.
+- Coherence and Cohesion: Sequences information and ideas logically. Manages all aspects of cohesion well. Uses paragraphing sufficiently and appropriately.
+- Lexical Resource: Uses a wide range of vocabulary fluently and flexibly to convey precise meanings. Skilfully uses uncommon lexical items but there may be occasional inaccuracies in word choice and collocation. Produces rare errors in spelling and/or word formation.
+- Grammatical Range and Accuracy: Uses a wide range of structures. The majority of sentences are error-free. Makes only very occasional errors or inaccuracies.
+
+BAND 7:
+- Task Achievement: Covers the requirements of the task. Presents a clear overview of main trends, differences or stages. Clearly presents and highlights key features but could be more fully extended.
+- Coherence and Cohesion: Logically organises information and ideas; there is a clear progression throughout. Uses a range of cohesive devices appropriately although there may be some under-/over-use. Presents a clear central topic within each paragraph.
+- Lexical Resource: Uses a sufficient range of vocabulary to allow some flexibility and precision. Uses less common lexical items with some awareness of style and collocation. May produce occasional errors in spelling and/or word formation, but they do not impede communication.
+- Grammatical Range and Accuracy: Uses a variety of complex structures. Produces frequent error-free sentences. Has good control of grammar and punctuation but may make a few errors.
+
+BAND 6:
+- Task Achievement: Addresses the requirements of the task. Presents a relevant overview. Key features are covered and adequately highlighted, but details may be irrelevant, inappropriate or inaccurate.
+- Coherence and Cohesion: Arranges information and ideas coherently; there is a clear overall progression. Uses cohesive devices effectively, but cohesion within and/or between sentences may be faulty or mechanical. May not always use paragraphing or paragraphing may not be logical.
+- Lexical Resource: Uses an adequate range of vocabulary for the task. Attempts to use less common vocabulary but with some inaccuracy. Makes some errors in spelling and/or word formation, but they do not impede communication.
+- Grammatical Range and Accuracy: Uses a mix of simple and complex sentence forms. Makes errors in grammar and punctuation but they rarely distort meaning.
+
+BAND 5:
+- Task Achievement: Generally addresses the task. Recounts detail mechanically; key features may be incompletely covered, or there may be a lack of a clear overview or data may be irrelevantly or inaccurately used.
+- Coherence and Cohesion: Presents information with some organisation but there may be a lack of overall progression. Makes inadequate, inaccurate or overuse of cohesive devices. May be repetitive because of lack of referencing and substitution. May not write in paragraphs or paragraphing may be inadequate.
+- Lexical Resource: Uses a limited range of vocabulary, but this is minimally adequate for the task. May make noticeable errors in spelling and/or word formation that may cause some difficulty for the reader.
+- Grammatical Range and Accuracy: Uses only a limited range of structures. Attempts complex sentences but these tend to be less accurate than simple sentences. May make frequent grammatical errors and punctuation may be faulty; errors can cause some difficulty for the reader.
+
+BANDS 4-0:
+- Task Achievement: Attempts to address the task but does not cover all requirements (Band 4) or fails to address key requirements (Band 3-0).
+- Coherence and Cohesion: Lacks logical organisation and overall progression. Cohesive devices are faulty or absent.
+- Lexical Resource: Vocabulary is extremely limited, repetitive, or inappropriate, with frequent errors that impede comprehension.
+- Grammatical Range and Accuracy: Grammar and punctuation errors dominate, with very limited range of sentence structures.`;
+
+const TASK2_DESCRIPTORS = `OFFICIAL IELTS ACADEMIC WRITING TASK 2 BAND DESCRIPTORS:
+
+BAND 9:
+- Task Response: Fully addresses all parts of the task. Presents a fully developed position in answer to the question with relevant, fully extended and supported ideas.
+- Coherence and Cohesion: Uses cohesion in such a way that it attracts no attention. Skilfully manages paragraphing.
+- Lexical Resource: Uses a wide range of vocabulary with very natural and sophisticated control of lexical features; rare minor errors occur only as slips.
+- Grammatical Range and Accuracy: Uses a wide range of structures with full flexibility and accuracy; rare minor errors occur only as slips.
+
+BAND 8:
+- Task Response: Sufficiently addresses all parts of the task. Presents a well-developed position in answer to the question with clearly formulated, addressed and supported key ideas.
+- Coherence and Cohesion: Sequences information and ideas logically. Manages all aspects of cohesion well. Uses paragraphing sufficiently and appropriately.
+- Lexical Resource: Uses a wide range of vocabulary fluently and flexibly to convey precise meanings. Skilfully uses uncommon lexical items but there may be occasional inaccuracies in word choice and collocation. Produces rare errors in spelling and/or word formation.
+- Grammatical Range and Accuracy: Uses a wide range of structures. The majority of sentences are error-free. Makes only very occasional errors or inaccuracies.
+
+BAND 7:
+- Task Response: Addresses all parts of the task. Presents a clear position throughout the response. Presents, extends and supports key ideas, but there may be a tendency to overgeneralise and/or supporting ideas may lack focus.
+- Coherence and Cohesion: Logically organises information and ideas; there is a clear progression throughout. Uses a range of cohesive devices appropriately although there may be some under-/over-use. Presents a clear central topic within each paragraph.
+- Lexical Resource: Uses a sufficient range of vocabulary to allow some flexibility and precision. Uses less common lexical items with some awareness of style and collocation. May produce occasional errors in spelling and/or word formation, but they do not impede communication.
+- Grammatical Range and Accuracy: Uses a variety of complex structures. Produces frequent error-free sentences. Has good control of grammar and punctuation but may make a few errors.
+
+BAND 6:
+- Task Response: Addresses all parts of the task, though some parts may be more fully covered than others. Presents a relevant position although the conclusions may be unclear or repetitive. Presents relevant main ideas but some may be inadequately developed/unclear.
+- Coherence and Cohesion: Arranges information and ideas coherently; there is a clear overall progression. Uses cohesive devices effectively, but cohesion within and/or between sentences may be faulty or mechanical. May not always use paragraphing or paragraphing may not be logical.
+- Lexical Resource: Uses an adequate range of vocabulary for the task. Attempts to use less common vocabulary but with some inaccuracy. Makes some errors in spelling and/or word formation, but they do not impede communication.
+- Grammatical Range and Accuracy: Uses a mix of simple and complex sentence forms. Makes errors in grammar and punctuation but they rarely distort meaning.
+
+BAND 5:
+- Task Response: Addresses the task only partially; the format may be inappropriate. Expresses a position but the development is not clear; conclusions may be missing or unsupported. Presents some main ideas but these are limited and not developed; there may be irrelevant detail.
+- Coherence and Cohesion: Presents information with some organisation but there may be a lack of overall progression. Makes inadequate, inaccurate or overuse of cohesive devices. May be repetitive because of lack of referencing and substitution. May not write in paragraphs or paragraphing may be inadequate.
+- Lexical Resource: Uses a limited range of vocabulary, but this is minimally adequate for the task. May make noticeable errors in spelling and/or word formation that may cause some difficulty for the reader.
+- Grammatical Range and Accuracy: Uses only a limited range of structures. Attempts complex sentences but these tend to be less accurate than simple sentences. May make frequent grammatical errors and punctuation may be faulty; errors can cause some difficulty for the reader.
+
+BANDS 4-0:
+- Task Response: Addresses the task only minimally or fails to write any relevant sentences (Band 4-0).
+- Coherence and Cohesion: Lacks logical organisation and overall progression. Cohesive devices are faulty or absent.
+- Lexical Resource: Vocabulary is extremely limited, repetitive, or inappropriate, with frequent errors that impede comprehension.
+- Grammatical Range and Accuracy: Grammar and punctuation errors dominate, with very limited range of sentence structures.`;
 
 function getApiKey(): string {
   const key = import.meta.env.VITE_GEMINI_API_KEY;
@@ -49,9 +121,7 @@ function buildUserPrompt(input: EvaluationInput): string {
   const minWords = input.taskType === 'task1' ? 150 : 250;
   const descriptors = input.taskType === 'task1' ? TASK1_DESCRIPTORS : TASK2_DESCRIPTORS;
 
-  const wordCountNote = input.meetsMinimum
-    ? `Word count (${input.wordCount}) meets the minimum of ${minWords}.`
-    : `WARNING: Word count (${input.wordCount}) is BELOW the minimum of ${minWords}. Apply appropriate penalties to ${taskCriterion}.`;
+  const wordCountNote = `The candidate's essay has a word count of ${input.wordCount} words (minimum required: ${minWords} words).`;
 
   return `${descriptors}
 
@@ -124,6 +194,18 @@ function normalizeCriterion(value: unknown): CriterionScore {
   };
 }
 
+function roundToIeltsBand(average: number): number {
+  const floor = Math.floor(average);
+  const decimal = average - floor;
+  if (decimal < 0.25) {
+    return floor;
+  } else if (decimal < 0.75) {
+    return floor + 0.5;
+  } else {
+    return floor + 1.0;
+  }
+}
+
 function parseEvaluationResult(raw: unknown): EvaluationResult {
   if (!raw || typeof raw !== 'object') {
     throw new Error('Invalid evaluation response from AI.');
@@ -142,11 +224,11 @@ function parseEvaluationResult(raw: unknown): EvaluationResult {
   const grammar = normalizeCriterion(criteriaRaw.grammar);
 
   const criteriaBands = [taskScore.band, coherence.band, lexical.band, grammar.band];
-  const computedAverage =
-    Math.round((criteriaBands.reduce((a, b) => a + b, 0) / 4) * 2) / 2;
+  const computedAverage = roundToIeltsBand(
+    criteriaBands.reduce((a, b) => a + b, 0) / 4
+  );
 
-  const overallBand =
-    typeof data.overall_band === 'number' ? data.overall_band : computedAverage;
+  const overallBand = computedAverage;
 
   const nextBandRaw = data.next_band_plan as Record<string, unknown> | undefined;
 
@@ -339,19 +421,8 @@ Examine the image and identify:
 1. Chart Type (must be one of: Bar Chart, Line Graph, Pie Chart, Table, Map, Process Diagram)
 2. Key Features (such as trends, highest values, lowest values, comparisons, significant changes over time)
 
-STEP 2: STRICT EVALUATION
-Check the following strictly:
-1. Was a clear overview provided? (A band 7+ requires a clear overview).
-2. Were key features selected and highlighted?
-3. Were major trends/differences identified?
-4. Were relevant comparisons made?
-5. Was irrelevant or excessive detail avoided?
-6. Did the essay accurately describe the visual data without misinterpreting or misstating numbers/features?
-
-PENALTY RULES:
-Apply strict penalties under Task Achievement:
-- If overview is missing: limit Task Achievement band score to a maximum of 5.0 or 6.0 depending on severity.
-- If key features are missed or data is misinterpreted: reduce Task Achievement score significantly.
+STEP 2: EVALUATION
+Evaluate the Task Achievement score strictly according to the official IELTS Writing Task 1 Band Descriptors, focusing on the clarity of the overview, the accuracy of data representation, and the selection of key features.
 
 Your JSON response must include a "task_analysis" object containing:
 - "chart_type": (e.g. "Bar Chart", "Line Graph", "Pie Chart", "Table", "Map", "Process Diagram")
