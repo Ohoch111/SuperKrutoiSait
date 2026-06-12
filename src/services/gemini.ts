@@ -1,4 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import type { Schema } from '@google/generative-ai';
 import type { EvaluationInput, EvaluationResult, CriterionScore } from '../types';
 
 const MODEL_NAME = 'gemini-2.5-flash';
@@ -197,6 +198,119 @@ export class GeminiEvaluationError extends Error {
   }
 }
 
+const CRITERION_SCHEMA: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    band: {
+      type: SchemaType.NUMBER,
+      description: "Band score for this criterion, 0 to 9 in 0.5 increments."
+    },
+    strengths: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: "List of strengths for this criterion."
+    },
+    weaknesses: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: "List of weaknesses for this criterion."
+    },
+    improvements: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: "List of actionable improvements to reach the next band."
+    },
+    missing_requirements: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: "List of requirements that were missing from this criterion."
+    },
+    justification: {
+      type: SchemaType.STRING,
+      description: "Detailed justification for this score using official descriptor language."
+    }
+  },
+  required: ["band", "strengths", "weaknesses", "improvements", "missing_requirements", "justification"]
+};
+
+const EVALUATION_SCHEMA: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    overall_band: {
+      type: SchemaType.NUMBER,
+      description: "The overall IELTS band score, which is the average of the four criteria rounded to the nearest 0.5."
+    },
+    criteria: {
+      type: SchemaType.OBJECT,
+      properties: {
+        task_score: CRITERION_SCHEMA,
+        coherence: CRITERION_SCHEMA,
+        lexical: CRITERION_SCHEMA,
+        grammar: CRITERION_SCHEMA
+      },
+      required: ["task_score", "coherence", "lexical", "grammar"]
+    },
+    overall_feedback: {
+      type: SchemaType.STRING,
+      description: "Official examiner summary feedback, 3-5 paragraphs."
+    },
+    corrections: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          original: { type: SchemaType.STRING, description: "The original incorrect text from the essay." },
+          correction: { type: SchemaType.STRING, description: "The suggested correction." },
+          explanation: { type: SchemaType.STRING, description: "The explanation of the error." }
+        },
+        required: ["original", "correction", "explanation"]
+      },
+      description: "List of grammar and vocabulary corrections."
+    },
+    model_essay: {
+      type: SchemaType.STRING,
+      description: "A band 8.5-9.0 model essay answering the same prompt."
+    },
+    strengths_summary: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: "Top 3-6 overall strengths."
+    },
+    weaknesses_summary: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: "Top 3-6 overall weaknesses."
+    },
+    next_band_plan: {
+      type: SchemaType.OBJECT,
+      properties: {
+        current_band: { type: SchemaType.NUMBER },
+        target_band: { type: SchemaType.NUMBER },
+        actions: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } }
+      },
+      required: ["current_band", "target_band", "actions"]
+    },
+    task_analysis: {
+      type: SchemaType.OBJECT,
+      properties: {
+        chart_type: { type: SchemaType.STRING, description: "Type of the chart, e.g. Bar Chart, Line Graph, Pie Chart, Table, Map, Process Diagram." },
+        key_features: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING }, description: "Key features/trends found in the visual data." }
+      },
+      required: ["chart_type", "key_features"]
+    }
+  },
+  required: [
+    "overall_band",
+    "criteria",
+    "overall_feedback",
+    "corrections",
+    "model_essay",
+    "strengths_summary",
+    "weaknesses_summary",
+    "next_band_plan"
+  ]
+};
+
 export async function evaluateEssay(input: EvaluationInput): Promise<EvaluationResult> {
   try {
     const genAI = new GoogleGenerativeAI(getApiKey());
@@ -207,6 +321,7 @@ export async function evaluateEssay(input: EvaluationInput): Promise<EvaluationR
         topP: 0.9,
         maxOutputTokens: 8192,
         responseMimeType: 'application/json',
+        responseSchema: EVALUATION_SCHEMA,
       },
       systemInstruction: SYSTEM_PROMPT,
     });
