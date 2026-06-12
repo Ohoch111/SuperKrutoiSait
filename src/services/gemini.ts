@@ -390,9 +390,12 @@ ${userPromptText}`;
 
     try {
       parsed = JSON.parse(jsonText);
-    } catch {
+    } catch (e) {
+      console.error("Gemini raw text output:", text);
+      console.error("Gemini extracted JSON text:", jsonText);
+      console.error("JSON parse error details:", e);
       throw new GeminiEvaluationError(
-        'Failed to parse evaluation response. The AI returned invalid JSON.'
+        `Failed to parse evaluation response. The AI returned invalid JSON. Error: ${e instanceof Error ? e.message : String(e)}`
       );
     }
 
