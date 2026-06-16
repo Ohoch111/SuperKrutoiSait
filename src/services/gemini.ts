@@ -27,7 +27,7 @@ Use only descriptor evidence.
 
 Score the four criteria (Task Achievement/Response, Coherence and Cohesion, Lexical Resource, and Grammatical Range and Accuracy) completely independently of each other. Do not let a low score in one criterion automatically drag down the scores of other criteria.
 
-Return valid JSON only matching the requested schema.`;
+Return valid JSON only matching the requested schema. Inside JSON string values (such as justifications, feedback, corrections, or explanations), never use raw unescaped double quotes ("). If you need to quote something, write a quote, or refer to a word, always use single quotes (') instead.`;
 
 const TASK1_DESCRIPTORS = `OFFICIAL IELTS ACADEMIC WRITING TASK 1 BAND DESCRIPTORS:
 
@@ -167,14 +167,112 @@ Return ONLY this JSON structure (no markdown, no code fences):
 
 function extractJson(text: string): string {
   const trimmed = text.trim();
-  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  
+  // Try to find code fence (supporting open/truncated code fence)
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)(?:```|$)/);
   if (fenceMatch?.[1]) return fenceMatch[1].trim();
+  
   const start = trimmed.indexOf('{');
-  const end = trimmed.lastIndexOf('}');
-  if (start !== -1 && end !== -1 && end > start) {
-    return trimmed.slice(start, end + 1);
+  if (start !== -1) {
+    const end = trimmed.lastIndexOf('}');
+    if (end > start) {
+      return trimmed.slice(start, end + 1);
+    }
+    return trimmed.slice(start);
   }
   return trimmed;
+}
+
+function repairJson(jsonStr: string): string {
+  // 1. Fix missing commas between properties/array items FIRST
+  let repaired = jsonStr.trim();
+  
+  // Add missing commas between properties/items on separate lines
+  repaired = repaired.replace(/(["\d\]}truefalsenull])\s*\n\s*"/g, '$1,\n"');
+  
+  // 2. Character-by-character scan to escape unescaped quotes, newlines, and track open braces/brackets
+  let result = '';
+  let inString = false;
+  let isEscaped = false;
+  const openStack: string[] = [];
+  
+  for (let i = 0; i < repaired.length; i++) {
+    const char = repaired[i];
+    
+    if (inString) {
+      if (isEscaped) {
+        result += char;
+        isEscaped = false;
+      } else if (char === '\\') {
+        result += char;
+        isEscaped = true;
+      } else if (char === '\n') {
+        result += '\\n';
+      } else if (char === '\r') {
+        result += '\\r';
+      } else if (char === '\t') {
+        result += '\\t';
+      } else if (char === '"') {
+        // Look ahead to see if this quote is a valid terminator
+        let nextNonWhitespace = '';
+        for (let j = i + 1; j < repaired.length; j++) {
+          const nextChar = repaired[j];
+          if (nextChar !== ' ' && nextChar !== '\t' && nextChar !== '\n' && nextChar !== '\r') {
+            nextNonWhitespace = nextChar;
+            break;
+          }
+        }
+        
+        // If followed by colon, comma, closing brace, or closing bracket, it's a terminator
+        if (nextNonWhitespace === ':' || nextNonWhitespace === ',' || nextNonWhitespace === '}' || nextNonWhitespace === ']' || nextNonWhitespace === '') {
+          inString = false;
+          result += char;
+        } else {
+          // Unescaped quote! Escape it.
+          result += '\\"';
+        }
+      } else {
+        result += char;
+      }
+    } else {
+      if (char === '"') {
+        inString = true;
+        result += char;
+      } else if (char === '{' || char === '[') {
+        openStack.push(char);
+        result += char;
+      } else if (char === '}') {
+        if (openStack[openStack.length - 1] === '{') {
+          openStack.pop();
+        }
+        result += char;
+      } else if (char === ']') {
+        if (openStack[openStack.length - 1] === '[') {
+          openStack.pop();
+        }
+        result += char;
+      } else {
+        result += char;
+      }
+    }
+  }
+  
+  // If we ended while still inside a string, close the string
+  if (inString) {
+    result += '"';
+  }
+  
+  // Close any open braces or brackets in reverse order
+  while (openStack.length > 0) {
+    const openChar = openStack.pop();
+    if (openChar === '{') {
+      result += '}';
+    } else if (openChar === '[') {
+      result += ']';
+    }
+  }
+  
+  return result;
 }
 
 function normalizeStringArray(value: unknown): string[] {
@@ -457,13 +555,15 @@ ${userPromptText}`;
     }
 
     const jsonText = extractJson(text);
+    const repairedJsonText = repairJson(jsonText);
     let parsed: unknown;
 
     try {
-      parsed = JSON.parse(jsonText);
+      parsed = JSON.parse(repairedJsonText);
     } catch (e) {
       console.error("Gemini raw text output:", text);
       console.error("Gemini extracted JSON text:", jsonText);
+      console.error("Gemini repaired JSON text:", repairedJsonText);
       console.error("JSON parse error details:", e);
       throw new GeminiEvaluationError(
         `Failed to parse evaluation response. The AI returned invalid JSON. Error: ${e instanceof Error ? e.message : String(e)}`
